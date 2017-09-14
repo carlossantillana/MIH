@@ -1,10 +1,4 @@
-// scrolltext demo for Adafruit RGBmatrixPanel library.
-// Demonstrates double-buffered animation on our 16x32 RGB LED matrix:
-// http://www.adafruit.com/products/420
-
-// Written by Limor Fried/Ladyada & Phil Burgess/PaintYourDragon
-// for Adafruit Industries.
-// BSD license, all text above must be included in any redistribution.
+//Headers included int this program were written by Adafruit.
 
 #include <Adafruit_GFX.h>   // Core graphics library
 #include <RGBmatrixPanel.h> // Hardware-specific library
@@ -15,47 +9,58 @@
 #define A   A0
 #define B   A1
 #define C   A2
-// Last parameter = 'true' enables double-buffering, for flicker-free,
-// buttery smooth animation.  Note that NOTHING WILL SHOW ON THE DISPLAY
-// until the first call to swapBuffers().  This is normal.
+#define F2(progmem_ptr) (const __FlashStringHelper *)progmem_ptr
+
 RGBmatrixPanel matrix(A, B, C, CLK, LAT, OE, false);
-// Double-buffered mode consumes nearly all the RAM available on the
-// Arduino Uno -- only a handful of free bytes remain.  Even the
-// following string needs to go in PROGMEM:
- 
- //included from benripley.com
-  unsigned short usartValue;
-  unsigned char inputValue;
-  unsigned char r, g, b;
-  int inputPin = 10;
+
+unsigned short usartValue;
+unsigned char previousValue;
+unsigned char inputValue;
+unsigned char r, g, b;
+int inputPin = 10;
+const char hours[] PROGMEM = "Hours";
+const char minutes[] PROGMEM = "Min";
+const char error[] PROGMEM = "Error";
+const char inputError[] PROGMEM = "IError";
 
 void setup() {
   Serial.begin(9600);
   pinMode(inputPin, INPUT);
   matrix.begin();
-  matrix.setTextSize(2);
+  matrix.setTextSize(1);
 }
 
 void loop() {
   inputValue = digitalRead(inputPin);
-  if (inputValue){// changes to weather
+  if (inputValue == 1){// changes to weather
     if (Serial.available()) {
       matrix.fillScreen(0);//clears screen
       usartValue = Serial.read();//reads temperaure from atmega
-      Serial.println(usartValue);
       changeColor();//changes color depending on temp
       matrix.setTextColor(matrix.Color333(r,g,b));
+      matrix.setTextSize(2);
       matrix.setCursor(1, 0);
-      matrix.print(usartValue);//prints temp to matrix
+      if (usartValue - previousValue < 5 || usartValue - previousValue > -5){
+        matrix.print(usartValue);//prints temperature to matrix
+      }
       delay(100);
       // Update display
       matrix.swapBuffers(false);
     }
   }
   else{//changes to alarm
-    matrix.fillScreen(matrix.Color333(7,3,1));
-  }
-  
+   if (Serial.available()) {
+      matrix.fillScreen(0);//clears screen
+      usartValue = Serial.read();//reads temperaure from atmega
+      matrix.setCursor(1, 0);
+      matrix.setTextSize(1);
+     printAlarm(usartValue);
+      delay(100);
+      // Update display
+      matrix.swapBuffers(false);
+   }
+  } 
+  previousValue = usartValue;
 }
 void changeColor(){
         if (usartValue <= 50){
@@ -93,5 +98,21 @@ void changeColor(){
         b = 7;
         g = 7;
       }
+}
+void printAlarm(short uv){
+  if (uv == 200){
+      matrix.print(F2(hours));
+}
+  else if(uv == 201){
+      matrix.print(F2(minutes));
+  }
+  else if(uv == 220){
+      matrix.print(F2(error));
+  }
+  else if(uv == 150){
+        matrix.fillScreen(matrix.Color333(7,3,1));
+  }
+//  else
+//    matrix.print(F2(inputError));
 }
 

@@ -69,8 +69,9 @@ int SMTick2(int state) {
 enum SM3_States {SM3_init, SM3_read, SM3_send_temp/*, SM3_set_alarm*/, SM3_set_hour, SM3_set_minute, SM3_start_alarm, SM3_wake_up};
 int SMTick3(int state) {
 	static unsigned char first;
-	static unsigned char minuteEntered;//delay between hours inputted shows up and minutes key word shows up
-	static unsigned char hourEntered; 
+	static char minutesEntered;//delay between hours inputted shows up and minutes key word shows up
+	static char hoursEntered; 
+	static unsigned char resetMessage;
 
 	//------------Transition State Machine-----------------------------------
 	switch(state){
@@ -102,14 +103,7 @@ int SMTick3(int state) {
 		case(SM3_send_temp):
 			state = SM3_read;
 		break;
-		
-// 		case(SM3_set_alarm)://outputs 'hour'
-// 		state = SM3_set_hour;
-// 		bluetoothInput = 0;
-// 		hours=0;
-// 		minutes =0;
-// 		break;
-// 		
+		 		
 		case(SM3_set_hour)://gets hours
 		if (bluetoothInput != 0x0A && bluetoothInput != 0x45 && bluetoothInput != 0x65 && !displayAlarm){//while not carriage return and not e
 			state = SM3_set_hour;
@@ -119,7 +113,8 @@ int SMTick3(int state) {
 			hours = 0;
 			bluetoothInput = 0;
 			first = 0;
-			hourEntered = 0;//newly added
+			hoursEntered = 0;//newly added
+			resetMessage =0;
 		}
 		else if (displayAlarm){
 			state = SM3_wake_up;
@@ -129,7 +124,8 @@ int SMTick3(int state) {
 			first = 0;
 			bluetoothInput = 0;
 			minutes =0;
-			hourEntered = 0;//newly added
+			hoursEntered = 0;//newly added
+			resetMessage =0;
 		}
 		break; 
 		
@@ -141,7 +137,8 @@ int SMTick3(int state) {
 			state = SM3_read;
 			bluetoothInput = 0;
 			minutes =0;
-			minuteEntered = 0;
+			minutesEntered = 0;
+			resetMessage =0;
 		}
 		else if (displayAlarm){
 			state = SM3_wake_up;
@@ -150,7 +147,8 @@ int SMTick3(int state) {
 		state = SM3_start_alarm;
 		bluetoothInput = 0;
 		first = 0;
-		minuteEntered = 0;
+		minutesEntered = 0;
+		resetMessage =0;
 		break;
 		
 		case(SM3_start_alarm)://starts alarm
@@ -193,8 +191,9 @@ int SMTick3(int state) {
 		minutes=40;
 		alarmCount=0;
 		alarmEnd=0;
-		minuteEntered=0;
-		hourEntered = 0;
+		minutesEntered=0;
+		hoursEntered = 0;
+		resetMessage = 0;
 		break;
 		
 		case(SM3_read):// reads input for temp or alarm
@@ -214,16 +213,9 @@ int SMTick3(int state) {
 		}
 		break;
 		
-// 		case(SM3_set_alarm)://send message telling to set hour on led matrix
-// 		PORTC &= 0x7F;// changes from temperature to alarm input
-// 		if (USART_IsSendReady()){
-// 			USART_Send(200);// 200 == code for hours
-// 		}
-// 		break;
-		
 		case(SM3_set_hour)://input hour until carriage return or e
 		PORTC &= 0x7F;// changes from temperature to alarm input
-		if (hourEntered == 0){
+		if (hoursEntered == 0){
 			if (USART_IsSendReady()){
 				USART_Send(200);// 200 == code for minute input
 			}
@@ -231,11 +223,16 @@ int SMTick3(int state) {
 		if(USART_HasReceived()){
 			bluetoothInput = USART_Receive();//does work
 			if (bluetoothInput >= 0x30 && bluetoothInput <= 0x39){//changed to hex
-			hours += (bluetoothInput - 0x30);//changed to hex
-			hourEntered = 1;
+				if (hoursEntered == 0){
+					hours += (bluetoothInput - 0x30);//changed to hex
+				}
+				if (hoursEntered == 1){
+					hours = (hours * 10) + (bluetoothInput - 0x30);
+				}
+				hoursEntered++;
 			}
 		}
-		if (bluetoothInput == 0x0A || bluetoothInput == 0x65){// checks for carrage return and e
+		if (bluetoothInput == 0x0A /*|| bluetoothInput == 0x65*/){// checks for carrage return and e
 			if (USART_IsSendReady()){
 				USART_Send(hours);
 			}
@@ -245,12 +242,11 @@ int SMTick3(int state) {
 				USART_Send(220);// 220 == code for error
 			}
 			hours = 0;
-			hourEntered = 0;
 		}
 		break;
 		
 		case(SM3_set_minute)://input minute until carriage return or e
-		if (minuteEntered == 0){
+		if (minutesEntered == 0){
 			if (USART_IsSendReady()){
 				USART_Send(201);// 201 == code for minute input
 			}
@@ -258,11 +254,16 @@ int SMTick3(int state) {
 		if(USART_HasReceived()){
 			bluetoothInput = USART_Receive();
 			if (bluetoothInput >= 0x30 && bluetoothInput <= 0x39){//changed to hex
-				minutes += (bluetoothInput - 0x30);
-				minuteEntered = 1;
+				if (minutesEntered == 0){
+					minutes += (bluetoothInput - 0x30);
+				}
+				if (minutesEntered == 1){
+					minutes = (minutes * 10) + (bluetoothInput - 0x30);
+				}
+				minutesEntered++;
 			}
 		}
-		if (bluetoothInput == 0x0A || bluetoothInput == 0x65){
+		if (bluetoothInput == 0x0A){
 			if (USART_IsSendReady()){
 				USART_Send(minutes);
 			}
@@ -272,13 +273,13 @@ int SMTick3(int state) {
 				USART_Send(220);// 220 == code for error
 			}
 			minutes = 0;
-			minuteEntered = 0;//restarts minute input
 		}
+
 		break;
 		
 		case(SM3_start_alarm)://set alarm end
 			alarmCount =0;
-			alarmEnd = (hours * 60 + minutes) * 60;//sets alarm end to minutes
+			alarmEnd = (hours * 60 + minutes) * 2;//sets alarm end to minutes
 			initializeAlarm = 1;
 		break;
 		
@@ -314,7 +315,7 @@ int SMTick4(int state) {//
 				}
 		}
 	}
-	if ((alarmCount > (alarmEnd + 60)) && displayAlarm == 1){//newly added
+	if ((alarmCount > (alarmEnd + 10)) && displayAlarm == 1){//newly added
 		set_PWM_speaker(scales[1]);
 	}
 	else{
@@ -350,7 +351,7 @@ DDRD = 0xBF; PORTD = 0x40;
 unsigned long int SMTick1_calc = 10;
 unsigned long int SMTick2_calc = 10;
 unsigned long int SMTick3_calc = 100;
-unsigned long int SMTick4_calc = 1000;
+unsigned long int SMTick4_calc = 30000;
 
 //Calculating GCD
 unsigned long int tmpGCD = 1;
